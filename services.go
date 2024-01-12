@@ -1,76 +1,129 @@
-package main
+package main 
 
 import (
-	// "time"
-	"github.com/gin-gonic/gin"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
+	
 )
-func getTasks(c *gin.Context){
-	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
-	return
+
+
+func HomePage(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, gin.H{"message": "Welcome to the Task Manager API"})
 }
 
-func getTask(c *gin.Context){
-	id := c.Param("id")
-		for _, task := range tasks {
-			if task.ID == id {
-				c.JSON(http.StatusOK, gin.H{"task": task})
-				return
-			}
-		}
-		c.JSON(http.StatusNotFound, gin.H{"error": "Task not Found!"})
-		return
-}
+func GetTasks(ctx *gin.Context) {
+	// Create a slice to store the retrieved tasks
+	var tasks []Task
 
-func createTask(c *gin.Context){
-	var newTask Task
-	if err := c.ShouldBindJSON(&newTask); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// Execute the database query to retrieve tasks using Go bun
+	err := DB.NewSelect().Model(&tasks).Scan(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	tasks = append(tasks, newTask)
-	c.JSON(http.StatusOK, gin.H{"message": "Task Created"})
-	return
+	// Return the retrieved tasks in the response
+	ctx.JSON(http.StatusOK, gin.H{"tasks": tasks})
 }
 
-func updateTask(c *gin.Context){
-	id := c.Param("id")
+func GetTask(c *gin.Context) {
+	taskID := c.Param("id")
 
-	var updatedTask Task
-
-	if err := c.ShouldBindJSON(&updatedTask); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	// Check if the task ID is empty
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID must be present"})
 		return
 	}
 
-	for i , task := range tasks {
-		if task.ID == id {
-			if updatedTask.Title != ""{
-				tasks[i].Title = updatedTask.Title
-			}
-			if updatedTask.Description != ""{
-				tasks[i].Description = updatedTask.Description
-			}
+	task := Task{}
 
-			c.JSON(http.StatusOK, gin.H{"message": "Task Updated"})
-			return 
-		}
+	// Fetch specific record from the database using Go bun
+	err := DB.NewSelect().Model(task).Where("id = ?", taskID).Scan(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
-	c.JSON(http.StatusNotFound, gin.H{"error": "Task Not Found"})
-	return
+
+	if task.ID == "" {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Task not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, task)
 }
 
-func deleteTask(c *gin.Context){
-	id := c.Param("id")
+func UpdateTask(ctx *gin.Context) {
+	taskID := ctx.Param("id")
 
-	for i, val := range tasks {
-		if val.ID == id {
-			tasks = append(tasks[:i], tasks[i+1:]...)
-			c.JSON(http.StatusOK, gin.H{"message": "Task Deleted"})
-			return
-		}
+	if taskID == "" {
+		ctx.JSON(http.StatusNoContent, gin.H{"error": "ID must be present"})
+		return
 	}
-	c.JSON(http.StatusNotFound, gin.H{"error": "Task Not Found"})
-	return
+
+	updatedTask := Task{}
+
+	// Bind JSON body to the updatedTask struct
+	if err := ctx.ShouldBindJSON(updatedTask); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Update the task record in the database using Go bun
+	_, err := DB.NewUpdate().Model(updatedTask).
+		Set("title = ?", updatedTask.Title).
+		Set("description = ?", updatedTask.Description).
+		Where("id = ?", taskID).
+		Exec(ctx.Request.Context())
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "Task updated"})
+}
+
+func RemoveTask(ctx *gin.Context) {
+	taskID := ctx.Param("id")
+
+	task := Task{}
+
+	// Delete specific task record from the database
+	res, err := DB.NewDelete().Model(task).Where("id = ?", taskID).Exec(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check if any rows were affected by the delete operation
+	if rowsAffected > 0 {
+		ctx.JSON(http.StatusOK, gin.H{"message": "Task removed"})
+	} else {
+		ctx.JSON(http.StatusNotFound, gin.H{"message": "Task not found"})
+	}
+}
+
+func AddTask(ctx *gin.Context) {
+	newTask := Task{}
+
+	if err := ctx.ShouldBindJSON(&newTask); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Insert the new task record into the database
+	_, err := DB.NewInsert().Model(&newTask).Exec(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx.JSON(http.StatusCreated, gin.H{"message": "Task created"})
 }
