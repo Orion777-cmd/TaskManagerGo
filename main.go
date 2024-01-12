@@ -2,7 +2,7 @@ package main
 
 import (
 	// "fmt"
-	"net/http"
+	// "net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,7 +11,7 @@ import (
 type Task struct{
 	ID string `json:"id"`
 	Title string `json:"title"`
-	Description string `json:"description"`
+	Description string `json:"descriptio~n"`
 	DueDate time.Time `json:"due_date"`
 	Status string `json:"status"`
 }
@@ -30,72 +30,15 @@ func main() {
 		})
 	})
 
-	router.GET("/tasks", func(c *gin.Context){
-		c.JSON(http.StatusOK, gin.H{"tasks": tasks})
-	})
+	router.GET("/tasks", getTasks)
 
 
-	router.GET("/tasks:id", func(c *gin.Context){
-		id := c.Param("id")
-		for _, task := range tasks {
-			if task.ID == id {
-				c.JSON(http.StatusOK, gin.H{"task": task})
-				return
-			}
-		}
-		c.JSON(http.StatusNotFound, gin.H{"error": "Task not Found!"})
+	router.GET("/tasks:id", getTask)
 
-	})
+	router.PUT("/tasks/:id", updateTask)
 
-	router.PUT("/tasks/:id", func(c *gin.Context){
-		id := c.Param("id")
+	router.DELETE("/tasks/:id", deleteTask)
 
-		var updatedTask Task
-
-		if err := c.ShouldBindJSON(&updatedTask); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		for i , task := range tasks {
-			if task.ID == id {
-				if updatedTask.Title != ""{
-					tasks[i].Title = updatedTask.Title
-				}
-				if updatedTask.Description != ""{
-					tasks[i].Description = updatedTask.Description
-				}
-
-				c.JSON(http.StatusOK, gin.H{"message": "Task Updated"})
-				return 
-			}
-		}
-		c.JSON(http.StatusNotFound, gin.H{"error": "Task Not Found"})
-		return
-	})
-
-	router.DELETE("/tasks/:id", func(c *gin.Context){
-		id := c.Param("id")
-
-		for i, val := range tasks {
-			if val.ID == id {
-				tasks = append(tasks[:i], tasks[i+1:]...)
-				c.JSON(http.StatusOK, gin.H{"message": "Task Deleted"})
-				return
-			}
-		}
-		c.JSON(http.StatusNotFound, gin.H{"error": "Task Not Found"})
-	})
-
-	router.POST("/tasks", func(c *gin.Context){
-		var newTask Task
-		if err := c.ShouldBindJSON(&newTask); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-
-		tasks = append(tasks, newTask)
-		c.JSON(http.StatusOK, gin.H{"message": "Task Created"})
-	})
+	router.POST("/tasks", createTask)
 	router.Run(":8080")
 }
